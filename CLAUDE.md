@@ -20,7 +20,7 @@
 | 警長 | **不採用** |
 | 帳號 | 免註冊，輸入暱稱即可；裝置產生匿名 playerId（存 localStorage）用於重連 |
 | 身份分配 | 隨機，房主可指定特定玩家角色 |
-| 即時後端 | **Convex**（從 Vercel Marketplace 安裝；尚未安裝，等使用者同意後再進行） |
+| 即時後端 | **Convex**（已接上；開發時用匿名本機後端，上線前需登入 Convex 建立雲端專案，見 3.2.2） |
 | AI 引擎 | 混合式：白天發言／PK／遺言用 Groq 上的 Qwen 3.8 27B（`qwen/qwen3.8-27b`），夜晚行動與投票用規則式 AI（見 3.3）；API key 僅存於伺服器端 |
 | AI 個性 | 補位 AI 各有固定人設（名字、頭像、說話風格） |
 | 斷線處理 | 真人斷線超過 30 秒 → AI 接管其行動與發言；重連後自動拿回控制權 |
@@ -148,6 +148,19 @@ convex/
 - 換成 Convex 時：`LocalGame` 的計時與 AI 排程移到 `convex/scheduler.ts`、`convex/ai.ts`，UI 改訂閱 `convex/views.ts`，其餘元件不變。
 - 戰績（`src/lib/stats.ts`、`/stats`）：遊戲結束時 `LocalGamePlay` 呼叫 `recordGame`，存入 localStorage `ww:stats`（依 `LocalGame.id` 去重，最多 500 筆）；戰績頁顯示總場數、勝率、連勝、陣營與各角色勝率、最近 10 局，可清除。
 - 測試：`src/sim/__tests__/` 用假時鐘讓 12 個座位全交給 AI 跑 20 局，確認每局都能結束。
+
+### 3.2.2 Convex 實作（`convex/`，已完成）
+- 開發：`CONVEX_AGENT_MODE=anonymous npx convex dev`（匿名本機後端，port 3210，不需帳號）；Next.js 讀 `.env.local` 的 `NEXT_PUBLIC_CONVEX_URL`。Groq key 用 `npx convex env set GROQ_API_KEY ...` 設在 Convex（不要印出來）。上線前：`npx convex login` 建立雲端專案，再部署到 Vercel。
+- `convex/` 直接 import `src/engine`、`src/sim/bots`、`src/ai/speech`（`convex/tsconfig.json` 設了 `@/` 別名）；前端用 `@convex/_generated/api`。
+- 資料表（`schema.ts`）：`rooms`（房號、成員 `{pid, id, name}`、房主、指定角色、目前 gameId）、`games`（GameState 存成 JSON 字串、座位 meta、真人座位 `humans`、phaseKey、deadline、計時器 id）、`presence`（心跳）。
+  - `pid` 是裝置的匿名 playerId（`src/lib/player.ts`，localStorage `ww:playerId`），等同登入憑證，**只存在伺服器、絕不回傳**；前端看到的是公開的 `id`。
+- `rooms.ts`：`get`／`create`／`join`／`leave`／`kick`／`assign`／`start`。開始時真人隨機入座、空位用 AI 補滿，身份揭曉有 12 秒緩衝（`REVEAL_MS`）才開始第一個夜晚步驟的計時。
+- `games.ts`：`view` 只回傳 `viewFor(state, 自己的座位)`，不在局裡的人什麼都拿不到；`act` 的座位一律由 playerId 決定，前端不能送 `timeout`；`heartbeat` 每 10 秒一次。內部函式：`tick`（計時到）、`botAct`、`speechContext`／`applySpeech`／`endSpeech`（AI 發言）。
+- `flow.ts` 的 `commit()` 取代本機的 `LocalGame`：階段一變就取消舊計時器、排新的（`ctx.scheduler.runAt`），並替 AI 座位（含斷線超過 30 秒的真人）排程行動；排程的函式執行時若 phaseKey 已變就不做事。遊戲結束時房間回到等待室（保留真人）。
+- `ai.ts`：`speak` action 呼叫 Groq（`src/ai/groq.ts`，和 `/api/ai/speech` 共用），失敗時用罐頭台詞。
+- 前端：`/room/[code]`（`Room.tsx`，即時等待室）、`/game/[code]`（`OnlineGame.tsx`）。遊戲畫面 `src/components/GameScreen.tsx` 由 `GameController` 提供資料，本機模擬（`/play`）與連線對局共用。連線對局不支援觀戰加速。
+- 節奏與座位設定（`DURATION`、`botDelay`、`readMs`、`buildSeats`）在 `src/sim/timing.ts`，兩邊共用。
+- 尚未做：LiveKit 即時語音、房主以外的人無法「再來一局」（回到等待室由房主按開始）、舊房間清理、Convex 函式的 `convex-test` 測試。
 
 ### 3.2.1 房間與連線
 - 房號 4 碼（排除易混淆字元），分享連結 `/room/ABCD`。

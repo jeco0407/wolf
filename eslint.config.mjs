@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Convex 自動產生的程式碼
+    "convex/_generated/**",
   ]),
 ]);
 

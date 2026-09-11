@@ -1,15 +1,5 @@
-import { buildMessages, cleanSpeech, validateSpeechRequest } from "@/ai/speech";
-import { toTraditional } from "@/ai/traditional";
-
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const DEFAULT_MODEL = "qwen/qwen3.8-27b";
-
-// Qwen3 預設會先「思考」再回答，發言不需要，關掉以節省 token；gpt-oss 無法關閉，只能調低
-function reasoningParams(model: string) {
-  if (model.startsWith("qwen/")) return { reasoning_effort: "none" };
-  if (model.startsWith("openai/gpt-oss")) return { reasoning_effort: "low" };
-  return {};
-}
+import { validateSpeechRequest } from "@/ai/speech";
+import { DEFAULT_MODEL, generateSpeech } from "@/ai/groq";
 
 // 簡單的每 IP 速率限制（同一個執行個體內）；Groq 本身還有組織層級的額度
 const WINDOW_MS = 60_000;
@@ -45,30 +35,7 @@ export async function POST(req: Request) {
   const speech = validateSpeechRequest(body);
   if (!speech) return error("格式錯誤", 400);
 
-  const model = process.env.GROQ_MODEL || DEFAULT_MODEL;
-  let res: Response;
-  try {
-    res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        messages: buildMessages(speech),
-        temperature: 0.9,
-        max_tokens: 220,
-        ...reasoningParams(model),
-      }),
-      signal: AbortSignal.timeout(15_000),
-    });
-  } catch {
-    return error("Groq 連線逾時", 504);
-  }
-
-  // 429 代表 Groq 額度用完，前端會改用罐頭台詞
-  if (!res.ok) return error(`Groq 回應 ${res.status}`, res.status === 429 ? 429 : 502);
-
-  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const text = cleanSpeech(toTraditional(data.choices?.[0]?.message?.content ?? ""));
-  if (!text) return error("模型沒有回應內容", 502);
-  return Response.json({ text });
+  const result = await generateSpeech(speech, key, process.env.GROQ_MODEL || DEFAULT_MODEL);
+  if ("error" in result) return error(result.error, result.status);
+  return Response.json({ text: result.text });
 }

@@ -1,16 +1,8 @@
-import { PERSONAS } from "@/ai/personas";
-import { createGame, EngineError, reduce, type Action, type GameState, type InteractiveStep, type Seat } from "@/engine";
-import { drawAvatars } from "@/lib/avatars";
+import { createGame, EngineError, reduce, type Action, type GameState, type Seat } from "@/engine";
 import { botActions } from "./bots";
+import { botDelay, buildSeats, DURATION, phaseKeyOf, readMs, type SeatMeta } from "./timing";
 
-export interface SeatMeta {
-  seat: Seat;
-  name: string;
-  avatar: string;
-  isUser: boolean;
-  style?: string;
-  voice?: { pitch: number; rate: number };
-}
+export type { SeatMeta };
 
 export interface Snapshot {
   state: GameState;
@@ -24,31 +16,6 @@ export type SpeechProvider = (s: GameState, seat: Seat, names: string[], style: 
 
 // 朗讀 AI 發言；念完時 resolve（關閉朗讀時立即 resolve）
 export type Narrator = (seat: Seat, text: string, voice?: SeatMeta["voice"]) => Promise<void>;
-
-// 各階段時限（毫秒）。夜晚每步固定時長，與角色死活無關，避免從等待時間推敲身份
-const DURATION: Record<InteractiveStep["kind"], number> = {
-  night: 6000,
-  speech: 90000,
-  lastWords: 60000,
-  vote: 30000,
-  hunter: 15000,
-  ended: 0,
-};
-
-function botDelay(phase: InteractiveStep): number {
-  if (phase.kind === "speech" || phase.kind === "lastWords") return 1800 + Math.random() * 1500;
-  if (phase.kind === "vote") return 600 + Math.random() * 3000;
-  return 800 + Math.random() * 2500;
-}
-
-function shuffle<T>(items: T[]): T[] {
-  const a = [...items];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
 
 // 本機模擬：在瀏覽器裡跑引擎，擔任「伺服器」角色（計時、驅動 AI）。
 // 之後換成 Convex 時，UI 只需改為訂閱伺服器上的 viewFor 結果。
@@ -75,20 +42,7 @@ export class LocalGame {
   ) {
     this.userSeat = 1 + Math.floor(Math.random() * 12);
     this.state = createGame({ seed: Math.floor(Math.random() * 2 ** 32) });
-    const avatars = drawAvatars(12);
-    const personas = shuffle(PERSONAS);
-    this.meta = this.state.players.map((p, i) => {
-      if (p.seat === this.userSeat) return { seat: p.seat, name: nickname, avatar: avatars[i], isUser: true };
-      const persona = personas.pop()!;
-      return {
-        seat: p.seat,
-        name: persona.name,
-        style: persona.style,
-        avatar: avatars[i],
-        isUser: false,
-        voice: { pitch: 0.7 + Math.random() * 0.7, rate: 0.95 + Math.random() * 0.3 },
-      };
-    });
+    this.meta = buildSeats(new Map([[this.userSeat, nickname]]));
     this.snapshot = this.makeSnapshot();
   }
 
@@ -139,7 +93,7 @@ export class LocalGame {
   };
 
   private refresh(resetTimer: boolean) {
-    const key = `${this.state.day}:${JSON.stringify(this.state.phase)}`;
+    const key = phaseKeyOf(this.state);
     const phaseChanged = key !== this.phaseKey;
     if (phaseChanged || resetTimer) {
       this.phaseKey = key;
@@ -186,10 +140,10 @@ export class LocalGame {
       if (this.destroyed || this.phaseKey !== key) return;
       const content = text ?? (canned?.type === "say" ? canned.text : "");
       this.dispatch({ type: "say", seat: m.seat, text: content });
-      const readMs = Math.min(12000, Math.max(2500, content.length * 100)) / this.speed;
+      const wait = readMs(content) / this.speed;
       // 開啟朗讀時等念完才換下一位；加速觀戰時不朗讀。階段若已改變（計時器被清掉）就不再結束發言
       const reading = this.narrator && this.speed === 1 ? this.narrator(m.seat, content, m.voice) : Promise.resolve();
-      const minWait = new Promise<void>((resolve) => this.timers.push(setTimeout(resolve, readMs)));
+      const minWait = new Promise<void>((resolve) => this.timers.push(setTimeout(resolve, wait)));
       void Promise.all([minWait, reading]).then(() => {
         if (!this.destroyed && this.phaseKey === key) this.dispatch({ type: "endSpeech", seat: m.seat });
       });

@@ -4,14 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
-
-const readNickname = () => {
-  try {
-    return localStorage.getItem("ww:nickname") ?? "";
-  } catch {
-    return "";
-  }
-};
+import { CreateRoomButton } from "@/components/CreateRoomButton";
+import { readNickname, saveNickname } from "@/lib/player";
 
 export default function Home() {
   const stored = useSyncExternalStore(
@@ -26,9 +20,7 @@ export default function Home() {
 
   const save = (v: string) => {
     setName(v);
-    try {
-      localStorage.setItem("ww:nickname", v);
-    } catch {}
+    saveNickname(v);
   };
 
   return (
@@ -55,12 +47,7 @@ export default function Home() {
           />
         </label>
 
-        <Link
-          href="/room/WXYZ"
-          className="btn-primary flex h-14 w-full items-center justify-center rounded-xl font-serif text-lg font-black tracking-widest"
-        >
-          建立房間
-        </Link>
+        <CreateRoomButton name={name} />
 
         <form
           className="flex gap-2"
@@ -80,8 +67,9 @@ export default function Home() {
           </button>
         </form>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-2">
           {[
+            { href: "/play", label: "單機練習", icon: "🤖" },
             { href: "/tutorial", label: "新手教學", icon: "📜" },
             { href: "/stats", label: "戰績", icon: "🏆" },
             { href: "/settings", label: "設定", icon: "⚙️" },

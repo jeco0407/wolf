@@ -150,7 +150,9 @@ convex/
 - 測試：`src/sim/__tests__/` 用假時鐘讓 12 個座位全交給 AI 跑 20 局，確認每局都能結束。
 
 ### 3.2.2 Convex 實作（`convex/`，已完成）
-- 開發：`CONVEX_AGENT_MODE=anonymous npx convex dev`（匿名本機後端，port 3210，不需帳號）；Next.js 讀 `.env.local` 的 `NEXT_PUBLIC_CONVEX_URL`。Groq key 用 `npx convex env set GROQ_API_KEY ...` 設在 Convex（不要印出來）。上線前：`npx convex login` 建立雲端專案，再部署到 Vercel。
+- Convex 專案：team `jack-92740`、project `werewolf`。開發環境 `ardent-chihuahua-768`（`npx convex dev`，`.env.local` 已設定），正式環境 `sincere-labrador-301`。兩邊的 `GROQ_API_KEY`／`GROQ_MODEL` 都設在 Convex 環境變數（`npx convex env set [--prod] ...`，不要印出 key）。
+- 正式網站：https://wolf-eight-indol.vercel.app（Vercel 連 GitHub `jeco0407/wolf`，推到 main 自動部署）。Vercel 的 Build Command 是 `npx convex deploy --cmd 'npm run build'`，環境變數 `CONVEX_DEPLOY_KEY`（只有 `deployment:deploy` 權限）、`GROQ_API_KEY`、`GROQ_MODEL`（後兩個給單機練習的 `/api/ai/speech`）。
+- Next.js 讀 `NEXT_PUBLIC_CONVEX_URL`（本機在 `.env.local`，Vercel 建置時由 `convex deploy` 自動帶入）。
 - `convex/` 直接 import `src/engine`、`src/sim/bots`、`src/ai/speech`（`convex/tsconfig.json` 設了 `@/` 別名）；前端用 `@convex/_generated/api`。
 - 資料表（`schema.ts`）：`rooms`（房號、成員 `{pid, id, name}`、房主、指定角色、目前 gameId）、`games`（GameState 存成 JSON 字串、座位 meta、真人座位 `humans`、phaseKey、deadline、計時器 id）、`presence`（心跳）。
   - `pid` 是裝置的匿名 playerId（`src/lib/player.ts`，localStorage `ww:playerId`），等同登入憑證，**只存在伺服器、絕不回傳**；前端看到的是公開的 `id`。

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { requestSpeech } from "@/ai/client";
+import { recordGame } from "@/lib/stats";
 import { playBgm, playSfx, say, unlockAudio } from "@/voice/audio";
 import { Avatar } from "@/components/Avatar";
 import { ChatLog } from "@/components/ChatLog";
@@ -117,6 +118,12 @@ export default function LocalGamePlay({ onRestart }: { onRestart: () => void }) 
     if (snap.started) events.slice(heard.current).forEach((e) => announce(e, me.seat, teamOf(me.role)));
     heard.current = events.length;
   }, [snap, me.seat, me.role]);
+
+  // 遊戲結束時寫入戰績（同一局只記一次）
+  useEffect(() => {
+    if (!snap.started || phase.kind !== "ended") return;
+    recordGame({ id: game.id, role: me.role, winner: phase.winner, survived: me.alive, days: view.day });
+  }, [snap.started, phase, game, me.role, me.alive, view.day]);
 
   // 離開頁面時停止背景音樂
   useEffect(

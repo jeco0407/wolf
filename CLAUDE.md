@@ -146,6 +146,7 @@ convex/
   - 模擬 300 局（全部 AI、罐頭發言）：好人勝率從 3% 提升到約 56%，放逐命中狼人從 12% 提升到 55%，女巫毒中狼人約 80%。
 - `narrate.ts` 把事件轉成聊天紀錄（法官播報／發言／🔒 私密資訊）。
 - 換成 Convex 時：`LocalGame` 的計時與 AI 排程移到 `convex/scheduler.ts`、`convex/ai.ts`，UI 改訂閱 `convex/views.ts`，其餘元件不變。
+- 戰績（`src/lib/stats.ts`、`/stats`）：遊戲結束時 `LocalGamePlay` 呼叫 `recordGame`，存入 localStorage `ww:stats`（依 `LocalGame.id` 去重，最多 500 筆）；戰績頁顯示總場數、勝率、連勝、陣營與各角色勝率、最近 10 局，可清除。
 - 測試：`src/sim/__tests__/` 用假時鐘讓 12 個座位全交給 AI 跑 20 局，確認每局都能結束。
 
 ### 3.2.1 房間與連線

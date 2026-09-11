@@ -53,6 +53,8 @@ function shuffle<T>(items: T[]): T[] {
 // 本機模擬：在瀏覽器裡跑引擎，擔任「伺服器」角色（計時、驅動 AI）。
 // 之後換成 Convex 時，UI 只需改為訂閱伺服器上的 viewFor 結果。
 export class LocalGame {
+  // 戰績用的對局 id，避免同一局重複記錄
+  readonly id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   readonly userSeat: Seat;
   readonly meta: SeatMeta[];
   private state: GameState;

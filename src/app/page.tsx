@@ -1,69 +1,98 @@
+"use client";
+
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, useSyncExternalStore } from "react";
+
+const readNickname = () => {
+  try {
+    return localStorage.getItem("ww:nickname") ?? "";
+  } catch {
+    return "";
+  }
+};
 
 export default function Home() {
+  const stored = useSyncExternalStore(
+    () => () => {},
+    readNickname,
+    () => "",
+  );
+  const [edited, setName] = useState<string | null>(null);
+  const name = edited ?? stored;
+  const [code, setCode] = useState("");
+  const router = useRouter();
+
+  const save = (v: string) => {
+    setName(v);
+    try {
+      localStorage.setItem("ww:nickname", v);
+    } catch {}
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="bg-nightscape relative flex min-h-dvh flex-col items-center px-6 pt-safe pb-safe">
+      <div className="fog pointer-events-none absolute inset-x-0 bottom-24 h-48" />
+      <div className="relative mt-6 aspect-square w-full max-w-[340px] [mask-image:radial-gradient(circle_at_center,black_52%,transparent_72%)]">
+        <Image src="/moon.jpeg" alt="" fill priority sizes="340px" className="object-cover" />
+      </div>
+
+      <h1 className="-mt-10 relative font-serif text-5xl font-black tracking-widest text-moon drop-shadow-[0_0_20px_rgba(179,18,46,0.5)]">
+        月夜狼人殺
+      </h1>
+      <p className="mt-3 text-sm tracking-[0.3em] text-mist">十二人標準局 · 真人連線 · AI 補位</p>
+
+      <div className="mt-auto w-full space-y-3 pb-6">
+        <label className="block">
+          <span className="mb-1 block text-xs text-mist">你的暱稱</span>
+          <input
+            value={name}
+            onChange={(e) => save(e.target.value)}
+            maxLength={8}
+            placeholder="輸入暱稱"
+            className="panel h-12 w-full rounded-xl px-4 text-base outline-none placeholder:text-mist/60 focus:border-gold/60"
+          />
+        </label>
+
+        <Link
+          href="/room/WXYZ"
+          className="btn-primary flex h-14 w-full items-center justify-center rounded-xl font-serif text-lg font-black tracking-widest"
+        >
+          建立房間
+        </Link>
+
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (code.length === 4) router.push(`/room/${code}`);
+          }}
+        >
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4))}
+            placeholder="輸入 4 碼房號"
+            className="panel h-12 min-w-0 flex-1 rounded-xl px-4 text-center font-mono text-lg tracking-[0.4em] outline-none placeholder:font-sans placeholder:text-sm placeholder:tracking-normal placeholder:text-mist/60"
+          />
+          <button disabled={code.length !== 4} className="h-12 rounded-xl bg-panel-2 px-5 text-sm font-bold disabled:opacity-40">
+            加入
+          </button>
+        </form>
+
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { href: "/tutorial", label: "新手教學", icon: "📜" },
+            { href: "/stats", label: "戰績", icon: "🏆" },
+            { href: "/settings", label: "設定", icon: "⚙️" },
+          ].map((l) => (
+            <Link key={l.href} href={l.href} className="panel flex h-16 flex-col items-center justify-center rounded-xl text-xs">
+              <span className="text-xl">{l.icon}</span>
+              {l.label}
+            </Link>
+          ))}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }

@@ -1,26 +1,81 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-night: #0a0e1a;
+  --color-panel: #141a2e;
+  --color-panel-2: #1c2440;
+  --color-moon: #e8e6f0;
+  --color-mist: #8a90a8;
+  --color-blood: #b3122e;
+  --color-gold: #c9a45c;
+  --color-wolf: #d4394f;
+  --color-good: #4f7fd4;
+  --font-serif: "Noto Serif TC", "Songti TC", serif;
+  --font-sans: "Noto Sans TC", "PingFang TC", system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-night);
+  color: var(--color-moon);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
 }
+
+/* 夜晚 / 白天背景 */
+.bg-nightscape {
+  background:
+    radial-gradient(circle at 80% 8%, rgba(232, 230, 240, 0.18) 0, rgba(232, 230, 240, 0.04) 12%, transparent 30%),
+    radial-gradient(ellipse at 50% 120%, rgba(179, 18, 46, 0.18), transparent 60%),
+    linear-gradient(180deg, #070a14 0%, #0a0e1a 50%, #0d1022 100%);
+}
+.bg-dayscape {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(201, 164, 92, 0.22), transparent 40%),
+    linear-gradient(180deg, #1a1522 0%, #141a2e 60%, #0f1426 100%);
+}
+
+.moon {
+  background: radial-gradient(circle at 35% 35%, #fffdf5, #d9d6e4 55%, #9b98ab 100%);
+  box-shadow: 0 0 60px 12px rgba(232, 230, 240, 0.25);
+}
+
+.panel {
+  background: color-mix(in srgb, var(--color-panel) 85%, transparent);
+  border: 1px solid rgba(201, 164, 92, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, #c61a38, #8e0e24);
+  box-shadow: 0 0 0 1px rgba(201, 164, 92, 0.35), 0 8px 24px -8px rgba(179, 18, 46, 0.7);
+}
+
+@keyframes fog {
+  0% { transform: translateX(-10%); opacity: 0.25; }
+  50% { opacity: 0.45; }
+  100% { transform: translateX(10%); opacity: 0.25; }
+}
+.fog {
+  background: radial-gradient(ellipse at center, rgba(138, 144, 168, 0.25), transparent 70%);
+  animation: fog 14s ease-in-out infinite alternate;
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(201, 164, 92, 0.7); }
+  100% { box-shadow: 0 0 0 10px rgba(201, 164, 92, 0); }
+}
+.speaking {
+  animation: pulse-ring 1.4s ease-out infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fade-in {
+  animation: fade-in 0.8s ease-out both;
+}
+
+.pb-safe { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+.pt-safe { padding-top: max(0.75rem, env(safe-area-inset-top)); }

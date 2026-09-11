@@ -52,6 +52,8 @@ export default defineSchema({
     timer: v.optional(v.id("_scheduled_functions")),
     // 身份揭曉的緩衝時間結束前，第一個夜晚步驟不開始計時
     startsAt: v.number(),
+    // 真人全部離線太久時暫停（不再排計時與 AI、不耗 Groq 額度）；有人心跳回來就繼續
+    paused: v.optional(v.boolean()),
   }).index("by_room", ["roomId"]),
 
   // 真人心跳：超過 30 秒沒有心跳視為斷線，由 AI 接管

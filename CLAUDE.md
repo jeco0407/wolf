@@ -143,7 +143,8 @@ convex/
 - AI 發言節奏：拿到 LLM 內容就先顯示，再依字數停留（約每 10 字 1 秒，2.5–12 秒）才換下一位。理由：讓玩家讀得完，也讓呼叫頻率約每分鐘 6 次，壓在 Groq 每分鐘 8K token 內（連續快速發言會觸發 429、變回罐頭台詞）。
 - `bots.ts` 是規則式 AI，只根據自己的 `viewFor(..., { ignoreDeath: true })` 視角做決定（死後開槍、遺言也不能拿到上帝視角）。發言已接上 Groq（`LocalGame` 的 `SpeechProvider`，失敗時用罐頭台詞）。
 - `reads.ts` 是規則式 AI 的「盤邏輯」：用關鍵字從發言解析跳身份、報查驗（金水／查殺）、踩人與保人，再加上票型（投給可信預言家、不跟查殺的人）與自己的私密資訊，算出每個座位的嫌疑分數。可疑的人踩人時份量較低。投票、查驗、用毒、守人、開槍都依這個分數；狼人刀人優先刀跳神職（避開跳獵人的人）、踩過隊友的人，並跟隨隊友的刀口。
-  - 模擬 300 局（全部 AI、罐頭發言）：好人勝率從 3% 提升到約 56%，放逐命中狼人從 12% 提升到 55%，女巫毒中狼人約 80%。
+- `analysis.ts` 把盤面整理成「判斷」：懷疑誰與理由（`reads.reasons`）、偏好人的是誰、打算投誰、誰踩過我；狼人另有戰術（預言家查殺隊友時，由座號最小、沒被查殺的存活狼悍跳；其他狼支持悍跳的隊友），真預言家有查驗結果。LLM 發言把它當成「心裡的想法」（`SpeechRequest.analysis`），讓發言有依據、和投票一致；沒有 LLM 時罐頭台詞也用它組句子。
+  - 模擬 200 局（全部 AI、罐頭發言、狼會悍跳）：好人勝率約 44%，放逐命中狼人約 50%。
 - `narrate.ts` 把事件轉成聊天紀錄（法官播報／發言／🔒 私密資訊）。
 - 換成 Convex 時：`LocalGame` 的計時與 AI 排程移到 `convex/scheduler.ts`、`convex/ai.ts`，UI 改訂閱 `convex/views.ts`，其餘元件不變。
 - 戰績（`src/lib/stats.ts`、`/stats`）：遊戲結束時 `LocalGamePlay` 呼叫 `recordGame`，存入 localStorage `ww:stats`（依 `LocalGame.id` 去重，最多 500 筆）；戰績頁顯示總場數、勝率、連勝、陣營與各角色勝率、最近 10 局，可清除。
@@ -159,7 +160,9 @@ convex/
 - `rooms.ts`：`get`／`create`／`join`／`leave`／`kick`／`assign`／`start`。開始時真人隨機入座、空位用 AI 補滿，身份揭曉有 12 秒緩衝（`REVEAL_MS`）才開始第一個夜晚步驟的計時。
 - `games.ts`：`view` 只回傳 `viewFor(state, 自己的座位)`，不在局裡的人什麼都拿不到；`act` 的座位一律由 playerId 決定，前端不能送 `timeout`；`heartbeat` 每 10 秒一次。內部函式：`tick`（計時到）、`botAct`、`speechContext`／`applySpeech`／`endSpeech`（AI 發言）。
 - `flow.ts` 的 `commit()` 取代本機的 `LocalGame`：階段一變就取消舊計時器、排新的（`ctx.scheduler.runAt`），並替 AI 座位（含斷線超過 30 秒的真人）排程行動；排程的函式執行時若 phaseKey 已變就不做事。遊戲結束時房間回到等待室（保留真人）。
-- `ai.ts`：`speak` action 呼叫 Groq（`src/ai/groq.ts`，和 `/api/ai/speech` 共用），失敗時用罐頭台詞。
+- `ai.ts`：`speak` action 呼叫 Groq（`src/ai/groq.ts`，和 `/api/ai/speech` 共用），失敗時用罐頭台詞。每分鐘額度不足（429 且建議等待 ≤ 20 秒）時等一下重試一次。
+- 省額度：沒有真人在線（30 秒內沒心跳）時 AI 只講罐頭台詞；真人全部離線超過 5 分鐘（`PAUSE_MS`）時對局暫停（`games.paused`，不排計時與 AI），有人心跳回來由 `resume()` 從目前階段繼續。
+- Groq 免費方案每日上限 20 萬 token（TPD，回應標頭不會顯示，429 訊息才看得到），約兩局。
 - 前端：`/room/[code]`（`Room.tsx`，即時等待室）、`/game/[code]`（`OnlineGame.tsx`）。遊戲畫面 `src/components/GameScreen.tsx` 由 `GameController` 提供資料，本機模擬（`/play`）與連線對局共用。連線對局不支援觀戰加速。
 - 節奏與座位設定（`DURATION`、`botDelay`、`readMs`、`buildSeats`）在 `src/sim/timing.ts`，兩邊共用。
 - 尚未做：LiveKit 即時語音、房主以外的人無法「再來一局」（回到等待室由房主按開始）、舊房間清理、Convex 函式的 `convex-test` 測試。

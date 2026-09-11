@@ -14,7 +14,16 @@ function reasoningParams(model: string) {
   return {};
 }
 
-export type SpeechResult = { text: string } | { error: string; status: number };
+// retryAfterMs：額度不足（429）時 Groq 建議多久後再試；每分鐘額度通常幾秒內恢復，每日額度要等很久
+export type SpeechResult = { text: string } | { error: string; status: number; retryAfterMs?: number };
+
+// 從標頭 retry-after（秒）或錯誤訊息「try again in 7m53.04s」讀出等待時間
+function retryAfter(res: Response, message: string): number | undefined {
+  const header = Number(res.headers.get("retry-after"));
+  if (header > 0) return header * 1000;
+  const m = message.match(/try again in (?:(\d+)m)?([\d.]+)s/);
+  return m ? (Number(m[1] ?? 0) * 60 + Number(m[2])) * 1000 : undefined;
+}
 
 export async function generateSpeech(req: SpeechRequest, key: string, model = DEFAULT_MODEL): Promise<SpeechResult> {
   let res: Response;
@@ -36,7 +45,13 @@ export async function generateSpeech(req: SpeechRequest, key: string, model = DE
   }
 
   // 429 代表 Groq 額度用完，呼叫端會改用罐頭台詞
-  if (!res.ok) return { error: `Groq 回應 ${res.status}`, status: res.status === 429 ? 429 : 502 };
+  if (!res.ok) {
+    if (res.status !== 429) return { error: `Groq 回應 ${res.status}`, status: 502 };
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    const message = body.error?.message ?? "";
+    const limit = /tokens per day|requests per day/.test(message) ? "每日額度用完" : "每分鐘額度不足";
+    return { error: `Groq 429（${limit}）`, status: 429, retryAfterMs: retryAfter(res, message) };
+  }
 
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   const text = cleanSpeech(toTraditional(data.choices?.[0]?.message?.content ?? ""));

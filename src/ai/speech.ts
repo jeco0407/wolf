@@ -1,4 +1,5 @@
 import { ROLE_NAME, SEAT_COUNT, viewFor, type GameState, type Role, type Seat, type SpeechKind } from "@/engine";
+import { analyzeView } from "@/sim/analysis";
 
 // AI 發言的請求：前端（之後是 Convex）依該 AI 的視角整理成精簡摘要，伺服器再組成 prompt。
 // Groq 免費方案有每分鐘與每日額度，所以摘要要短：只留最近的發言與公告。
@@ -11,11 +12,13 @@ export interface SpeechRequest {
   kind: SpeechKind;
   roster: string;
   knowledge: string[];
+  // 規則式 AI 的盤面判斷（懷疑誰、理由、打算投誰、狼人戰術），讓發言有依據並和投票一致
+  analysis: string[];
   publicLog: string[];
   transcript: string[];
 }
 
-export const LIMITS = { knowledge: 12, publicLog: 10, transcript: 16, text: 120, line: 200, roster: 400, name: 12, style: 60 };
+export const LIMITS = { knowledge: 12, analysis: 10, publicLog: 10, transcript: 16, text: 120, line: 200, roster: 400, name: 12, style: 60 };
 
 const clip = (text: string, max = LIMITS.text) => (text.length > max ? `${text.slice(0, max)}…` : text);
 
@@ -93,6 +96,7 @@ export function buildSpeechRequest(s: GameState, seat: Seat, names: string[], st
     kind,
     roster: view.players.map((p) => `${p.seat} 號 ${names[p.seat - 1]}${p.alive ? "" : "（出局）"}`).join("、"),
     knowledge: knowledge.slice(-LIMITS.knowledge),
+    analysis: analyzeView(view).slice(0, LIMITS.analysis),
     publicLog: publicLog.slice(-LIMITS.publicLog),
     transcript: transcript.slice(-LIMITS.transcript),
   };
@@ -118,6 +122,7 @@ export function validateSpeechRequest(body: unknown): SpeechRequest | null {
     !KINDS.includes(b.kind as SpeechKind) ||
     !isText(b.roster, LIMITS.roster) ||
     !isLines(b.knowledge, LIMITS.knowledge) ||
+    !isLines(b.analysis, LIMITS.analysis) ||
     !isLines(b.publicLog, LIMITS.publicLog) ||
     !isLines(b.transcript, LIMITS.transcript)
   ) {
@@ -132,6 +137,7 @@ export function validateSpeechRequest(body: unknown): SpeechRequest | null {
     kind: b.kind as SpeechKind,
     roster: b.roster,
     knowledge: b.knowledge,
+    analysis: b.analysis,
     publicLog: b.publicLog,
     transcript: b.transcript,
   };
@@ -157,7 +163,8 @@ export function buildMessages(req: SpeechRequest): { role: "system" | "user"; co
     "你正在參加 12 人狼人殺（4 狼人、4 平民、預言家、女巫、獵人、守衛；屠邊規則；沒有警長）。",
     `你扮演 ${req.seat} 號「${req.name}」，說話風格：${req.style}。你就是 ${req.seat} 號，提到自己時用「我」，不要用第三人稱談論 ${req.seat} 號。`,
     `你的真實身份是${ROLE_NAME[req.role]}。${ROLE_GUIDE[req.role]}`,
-    "輸出規則：用台灣繁體中文口語（每個字都必須是繁體字，不可以出現簡體字），40 到 120 字，只輸出發言內容本身；不要加引號、旁白、動作描述或「X 號：」前綴；用座位號稱呼其他玩家；使用常見的狼人殺術語（例如查殺、金水、站邊、踩、歸票、悍跳），不要自創詞彙，也不要夾雜英文；「屠邊」是狼人的勝利條件，不要拿來形容一晚的結果；不要編造你不可能知道的資訊，也不要評論還沒發言的人說了什麼。",
+    "像真人高手一樣發言：先回應前面有人提到你或質疑你的地方；接著點名你懷疑或相信的人，理由要具體（引用某人說過的話、某次投票、查驗結果）；最後表態這輪想投誰。不要說空話（例如「沒什麼資訊」「先聽聽看」「大家加油」），不要重複別人剛說過的話，也不要每句都在自我介紹。發言可以有情緒和個性，但要有邏輯。",
+    "輸出規則：用台灣繁體中文口語（每個字都必須是繁體字，不可以出現簡體字），60 到 140 字，只輸出發言內容本身；不要加引號、旁白、動作描述或「X 號：」前綴；用座位號稱呼其他玩家；使用常見的狼人殺術語（例如查殺、金水、站邊、踩、歸票、悍跳），不要自創詞彙，也不要夾雜英文；「屠邊」是狼人的勝利條件，不要拿來形容一晚的結果；絕對不要編造事實：引用別人的發言或投票時，只能用下面「最近的發言」「法官公告」裡真的出現過的內容，沒有出現過就不要說；也不要評論還沒發言的人說了什麼。",
   ].join("\n");
 
   const list = (title: string, lines: string[]) => (lines.length ? `${title}：\n${lines.map((l) => `- ${l}`).join("\n")}` : "");
@@ -165,6 +172,7 @@ export function buildMessages(req: SpeechRequest): { role: "system" | "user"; co
     `現在是第 ${req.day} 天。${TASK[req.kind]}`,
     `座位：${req.roster}`,
     list("只有你知道的資訊", req.knowledge) || "你沒有額外的私密資訊。",
+    list("你的盤面判斷（這是你心裡的想法，用自己的話說，不要照抄；懷疑的理由可以自己延伸）", req.analysis),
     list("法官公告", req.publicLog),
     list("最近的發言", req.transcript) || "目前還沒有人發言。",
     "請直接說出你的發言：",

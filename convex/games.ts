@@ -6,7 +6,7 @@ import { readMs } from "../src/sim/timing";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, mutation, query, type QueryCtx } from "./_generated/server";
-import { applyAll, commit, loadState, seatOf } from "./flow";
+import { applyAll, commit, loadState, resume, seatOf } from "./flow";
 
 async function gameFor(ctx: QueryCtx, code: string) {
   const room = await ctx.db
@@ -78,6 +78,7 @@ export const heartbeat = mutation({
       .unique();
     if (existing) await ctx.db.patch(existing._id, { lastSeen: Date.now() });
     else await ctx.db.insert("presence", { gameId: game._id, seat, lastSeen: Date.now() });
+    if (game.paused) await resume(ctx, game);
   },
 });
 

@@ -56,3 +56,22 @@ describe("盤邏輯", () => {
     expect(reads.score(4)).toBeGreaterThanOrEqual(8);
   });
 });
+
+describe("盤邏輯（遺言）", () => {
+  it("預言家遺言「10 號是狼人」也算報查驗", () => {
+    const e = { type: "speech", seat: 4, text: "我是預言家，10 號是狼人。好人照這個走。", kind: "lastWords", day: 1 } as unknown as GameEvent;
+    const reads = readTable(viewOf(9, "villager", [e]));
+    expect(reads.seerClaims).toEqual([{ seat: 4, target: 10, team: "wolf" }]);
+    expect(mostSuspicious(reads, [3, 10], 0)).toBe(10);
+  });
+});
+
+describe("盤邏輯（多個查驗）", () => {
+  it("一句話報多個查驗都解析得到", () => {
+    const reads = readTable(viewOf(9, "villager", [speech(4, "我是預言家，2 號是好人、6 號是狼人。今天投查殺。")]));
+    expect(reads.seerClaims).toEqual([
+      { seat: 4, target: 2, team: "good" },
+      { seat: 4, target: 6, team: "wolf" },
+    ]);
+  });
+});

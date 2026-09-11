@@ -1,4 +1,5 @@
 import { viewFor, type Action, type GameState, type GameView, type Seat } from "@/engine";
+import { analyze } from "./analysis";
 import { mostSuspicious, readTable, type Reads } from "./reads";
 
 // 規則式 AI：夜晚行動、投票、開槍依 reads.ts 的盤邏輯決定；發言優先交給 Groq（LocalGame 的 SpeechProvider），
@@ -37,7 +38,7 @@ export function botActions(s: GameState, seat: Seat): Action[] {
     case "lastWords":
       if (phase.seat !== seat) return [];
       return [
-        { type: "say", seat, text: speechFor(s, view, readTable(view), seat, isWolf ? nonWolves : others) },
+        { type: "say", seat, text: speechFor(s, view) },
         { type: "endSpeech", seat },
       ];
     case "vote": {
@@ -123,29 +124,48 @@ function witchActions(s: GameState, view: GameView, reads: Reads, seat: Seat, ot
   return [];
 }
 
-function speechFor(s: GameState, view: GameView, reads: Reads, seat: Seat, suspects: Seat[]): string {
+// 罐頭台詞（沒有 LLM 時）：依盤面判斷組句子，至少講出具體的人和理由，而且每個人講的不一樣
+function speechFor(s: GameState, view: GameView): string {
   const phase = s.phase;
-  const me = s.players[seat - 1];
-  const suspect = mostSuspicious(reads, suspects) ?? suspects[0];
+  const a = analyze(view);
+  const main = a.suspects[0];
+  // 理由原本是寫給 LLM 的第二人稱，罐頭台詞改成第一人稱並拿掉括號補充
+  const reason = main?.reasons
+    .find((r) => !(r.startsWith("踩過") && a.accusedBy.includes(main.seat)))
+    ?.replace(/（.*?）/g, "")
+    .replaceAll("你", "我");
+  const trust = a.trusted[0]?.seat;
+  const t = a.tactic;
 
   if (phase.kind === "lastWords") {
-    return pickOne([`我是好人，走得有點冤。大家注意 ${suspect} 號。`, `我沒什麼資訊，希望好人加油，${suspect} 號可以多聽聽。`])!;
+    if (view.you!.role === "seer" && t?.kind === "reportChecks") return `我是預言家，${checkText(t.checks)}。好人照這個走，別被帶偏。`;
+    return main ? `我走了，留一句：${main.seat} 號${reason ? `${reason}，` : ""}大家下一輪重點看他。` : "我走了，好人加油，把票集中別分散。";
   }
-  if (phase.kind === "speech" && phase.pk) return `我真的是好人，請大家不要投我。${suspect} 號比我可疑多了。`;
-
-  if (me.role === "seer") {
-    const last = seerResults(view).at(-1);
-    if (last && (last.team === "wolf" || Math.random() < 0.4)) {
-      return `我是預言家，昨晚查驗 ${last.target} 號，他是${last.team === "wolf" ? "狼人，大家跟我投他" : "好人"}。`;
-    }
+  if (phase.kind === "speech" && phase.pk) {
+    return `我不是狼。${a.accusedBy.length ? `${a.accusedBy.map((x) => `${x} 號`).join("、")}一直踩我，` : ""}${main ? `我覺得 ${main.seat} 號更可疑，` : ""}請大家把票投給對的人。`;
   }
 
-  return pickOne([
-    "我是好人，這輪沒什麼資訊，先聽聽後面怎麼說。",
-    `我覺得 ${suspect} 號剛才的發言有點刻意，這輪先關注他。`,
-    s.dawnDeaths.length
-      ? `昨晚死了 ${s.dawnDeaths.join("、")} 號，我覺得狼人在隱藏，大家別被帶節奏。`
-      : "平安夜的話，守衛或女巫應該有動作，我先相信前面的發言。",
-    `我是平民，跟著預言家走。${suspect} 號我先打個問號。`,
-  ])!;
+  if (t?.kind === "fakeSeer") return `我才是預言家！昨晚查驗 ${t.wolfCheck} 號，他是狼人，他是悍跳。${t.goldCheck ? `${t.goldCheck} 號是我的金水。` : ""}今天出 ${t.wolfCheck} 號。`;
+  if (t?.kind === "reportChecks" && (t.checks.some((c) => c.wolf) || s.day >= 2)) return `我是預言家，${checkText(t.checks)}。${t.checks.some((c) => c.wolf) ? "今天大家跟我投查殺。" : "金水可以先放一邊，看其他人。"}`;
+  if (t?.kind === "backClaim") return `我站 ${t.seat} 號的預言家，他的發言比較像真的。${main ? `${main.seat} 號我覺得有問題，這輪投他。` : ""}`;
+
+  const parts: string[] = [];
+  if (a.accusedBy.length) parts.push(pickOne([`${a.accusedBy[0]} 號踩我沒有道理，我是好人`, `${a.accusedBy[0]} 號，你點我點得太急了`])!);
+  if (main) {
+    parts.push(
+      pickOne([
+        `我比較懷疑 ${main.seat} 號${reason ? `，因為他${reason}` : "，發言一直在繞"}`,
+        `${main.seat} 號我看不下去${reason ? `，${reason}` : "，立場搖擺"}`,
+        `這輪我想出 ${main.seat} 號${reason ? `，他${reason}` : ""}`,
+      ])!,
+    );
+  } else {
+    parts.push(pickOne(["目前每個人都講得差不多，我先看票型", "還沒有明顯的狼，我等等看誰在跟風", "前面發言都太保守了，我不太滿意"])!);
+  }
+  if (trust !== undefined) parts.push(pickOne([`${trust} 號我暫時相信`, `${trust} 號偏好人，先不動他`])!);
+  if (main) parts.push(`投票我會投 ${main.seat} 號`);
+  return `${parts.join("，")}。`;
 }
+
+const checkText = (checks: { target: Seat; wolf: boolean }[]) =>
+  checks.map((c) => `${c.target} 號是${c.wolf ? "狼人" : "好人"}`).join("、");

@@ -10,9 +10,11 @@ export interface AudioSettings {
   sfx: boolean;
   bgm: boolean;
   volume: number;
+  // 朗讀速度倍率（套用在法官與每位 AI 的語速上）
+  ttsRate: number;
 }
 
-const DEFAULTS: AudioSettings = { judgeVoice: true, aiVoice: true, sfx: true, bgm: true, volume: 0.8 };
+const DEFAULTS: AudioSettings = { judgeVoice: true, aiVoice: true, sfx: true, bgm: true, volume: 0.8, ttsRate: 1 };
 const STORAGE_KEY = "ww:audio";
 
 // ---- 設定（useSyncExternalStore 相容的小型 store） ----
@@ -253,7 +255,7 @@ export function say(
     u.volume = s.volume;
     // 法官聲音低沉、稍慢；AI 用各自人設的音高與語速
     u.pitch = opts.voice?.pitch ?? 0.7;
-    u.rate = opts.voice?.rate ?? 0.95;
+    u.rate = (opts.voice?.rate ?? 0.85) * s.ttsRate;
     // 保險：某些瀏覽器不會觸發 onend。長發言約 40 秒，所以給到 60 秒
     const safety = setTimeout(resolve, 60000);
     u.onend = u.onerror = () => {

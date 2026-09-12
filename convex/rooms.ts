@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { BOARD, createGame, ROLE_NAME, SEAT_COUNT, type Role, type Seat } from "../src/engine";
+import { BOARD, createGame, ROLE_NAME, SEAT_COUNT, type GameState, type Role, type Seat } from "../src/engine";
 import { buildSeats, phaseKeyOf, shuffle } from "../src/sim/timing";
 import type { Doc } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
@@ -173,7 +173,15 @@ export const start = mutation({
       if (role && ROLES.includes(role)) assigned[seats[i]] = role;
     });
 
-    const state = createGame({ seed: Math.floor(Math.random() * 2 ** 32), assigned });
+    // 發牌：真人拿到和上一局一樣的角色時重新發（最多 6 次，取重複最少的一次）；房主指定的角色不算
+    const repeats = (s: GameState) =>
+      room.members.filter((m, i) => !room.assigned[m.id] && room.lastRoles?.[m.id] === s.players[seats[i] - 1].role).length;
+    let state = createGame({ seed: Math.floor(Math.random() * 2 ** 32), assigned });
+    for (let attempt = 0; attempt < 6 && repeats(state) > 0; attempt++) {
+      const next = createGame({ seed: Math.floor(Math.random() * 2 ** 32), assigned });
+      if (repeats(next) < repeats(state)) state = next;
+    }
+    const lastRoles = Object.fromEntries(room.members.map((m, i) => [m.id, state.players[seats[i] - 1].role]));
     const meta = buildSeats(new Map(room.members.map((m, i) => [seats[i], m.name])));
     const now = Date.now();
     const gameId = await ctx.db.insert("games", {
@@ -186,7 +194,7 @@ export const start = mutation({
       startsAt: now + REVEAL_MS,
     });
     for (const h of humans) await ctx.db.insert("presence", { gameId, seat: h.seat, lastSeen: now });
-    await ctx.db.patch(room._id, { status: "playing", gameId, updatedAt: now });
+    await ctx.db.patch(room._id, { status: "playing", gameId, lastRoles, updatedAt: now });
 
     // phaseKey 設為空字串，commit 會把第一個夜晚步驟的計時與 AI 行動排程好
     const game = (await ctx.db.get(gameId))!;

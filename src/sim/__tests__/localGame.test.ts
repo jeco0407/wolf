@@ -73,3 +73,15 @@ describe("本機模擬", () => {
     expect(game.getSnapshot().state.phase).toEqual({ kind: "night", step: "guard" });
   });
 });
+
+describe("發牌", () => {
+  it("避開上一局的角色：上一局是狼人，這局幾乎不會再是狼人", () => {
+    let wolves = 0;
+    for (let i = 0; i < 300; i++) {
+      const game = new LocalGame("測試", undefined, undefined, "werewolf");
+      if (game.getSnapshot().state.players[game.userSeat - 1].role === "werewolf") wolves++;
+    }
+    // 不避開時約 1/3（100 次）；重新發牌 6 次後約 (1/3)^7，300 局幾乎是 0
+    expect(wolves).toBeLessThan(5);
+  });
+});

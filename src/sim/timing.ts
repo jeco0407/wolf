@@ -31,9 +31,9 @@ export function botDelay(phase: InteractiveStep): number {
   return 800 + Math.random() * 2500;
 }
 
-// AI 發言顯示後停留多久才換下一位：配合朗讀速度（中文語音約每秒 4–5 字），每字 0.23 秒再加 1 秒緩衝，3–40 秒。
+// AI 發言顯示後停留多久才換下一位：配合放慢後的朗讀速度（語速 0.8–1.0 時中文約每秒 3.5–4 字），每字 0.28 秒再加 1 秒緩衝，3–45 秒。
 // 讓玩家念完、聽完才換人，也把呼叫頻率壓在 Groq 每分鐘 token 額度內
-export const readMs = (text: string) => Math.min(40000, Math.max(3000, 1000 + text.length * 230));
+export const readMs = (text: string) => Math.min(45000, Math.max(3000, 1000 + text.length * 280));
 
 // 目前階段的識別字串：階段一變，計時與 AI 排程就重來
 export const phaseKeyOf = (s: GameState) => `${s.day}:${JSON.stringify(s.phase)}`;
@@ -62,7 +62,8 @@ export function buildSeats(humans: Map<Seat, string>): SeatMeta[] {
       style: persona.style,
       avatar: avatars[i],
       isUser: false,
-      voice: { pitch: 0.7 + Math.random() * 0.7, rate: 0.95 + Math.random() * 0.3 },
+      // 語速 0.8–1.0（使用者反映 1.0 以上太快）；音高分散，讓每位 AI 聽得出差別
+      voice: { pitch: 0.7 + Math.random() * 0.7, rate: 0.8 + Math.random() * 0.2 },
     };
   });
 }

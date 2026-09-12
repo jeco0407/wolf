@@ -1,4 +1,4 @@
-import { createGame, EngineError, reduce, type Action, type GameState, type Seat } from "@/engine";
+import { createGame, EngineError, reduce, type Action, type GameState, type Role, type Seat } from "@/engine";
 import { botActions } from "./bots";
 import { botDelay, buildSeats, DURATION, phaseKeyOf, readMs, type SeatMeta } from "./timing";
 
@@ -39,9 +39,14 @@ export class LocalGame {
     nickname: string,
     private readonly speech?: SpeechProvider,
     private readonly narrator?: Narrator,
+    // 上一局自己的角色：重新發牌最多 6 次，避免連續抽到同一個角色
+    avoidRole?: Role,
   ) {
     this.userSeat = 1 + Math.floor(Math.random() * 12);
     this.state = createGame({ seed: Math.floor(Math.random() * 2 ** 32) });
+    for (let attempt = 0; attempt < 6 && avoidRole && this.state.players[this.userSeat - 1].role === avoidRole; attempt++) {
+      this.state = createGame({ seed: Math.floor(Math.random() * 2 ** 32) });
+    }
     this.meta = buildSeats(new Map([[this.userSeat, nickname]]));
     this.snapshot = this.makeSnapshot();
   }
@@ -130,8 +135,8 @@ export class LocalGame {
     }
   }
 
-  // 發言交給 LLM：拿到內容就先顯示，再依字數停留（約每 10 字 1 秒，2.5–12 秒）才換下一位。
-  // 這讓玩家讀得完，也把呼叫頻率壓在 Groq 每分鐘 token 額度內。等待期間階段若已改變就放棄這次結果。
+  // 發言交給 LLM：拿到內容就先顯示並朗讀，依字數停留（readMs，配合朗讀速度）且念完才換下一位。
+  // 這讓玩家聽得完，也把呼叫頻率壓在 Groq 每分鐘 token 額度內。等待期間階段若已改變就放棄這次結果。
   private speakWithAI(m: SeatMeta, fallback: Action[]) {
     const key = this.phaseKey;
     const names = this.meta.map((x) => x.name);

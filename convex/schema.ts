@@ -27,6 +27,8 @@ export default defineSchema({
     ),
     // 房主指定的角色：公開 id → 角色
     assigned: v.record(v.string(), role),
+    // 每位真人上一局的角色（公開 id → 角色），開局時避免連續抽到同一個角色
+    lastRoles: v.optional(v.record(v.string(), role)),
     gameId: v.optional(v.id("games")),
     updatedAt: v.number(),
   }).index("by_code", ["code"]),

@@ -14,7 +14,7 @@ import {
   type AudioSettings,
 } from "@/voice/audio";
 
-const TOGGLES: { key: Exclude<keyof AudioSettings, "volume">; label: string; hint: string }[] = [
+const TOGGLES: { key: Exclude<keyof AudioSettings, "volume" | "ttsRate">; label: string; hint: string }[] = [
   { key: "judgeVoice", label: "法官語音播報", hint: "天黑請閉眼、天亮公布死訊、投票結果" },
   { key: "aiVoice", label: "AI 發言自動朗讀", hint: "開啟時會等 AI 念完才換下一位" },
   { key: "sfx", label: "音效", hint: "翻牌、鐘聲、狼嚎、倒數、槍聲等" },
@@ -28,6 +28,7 @@ export default function Settings() {
     unlockAudio();
     void playSfx("bell");
     void say("天黑請閉眼。守衛請睜眼。", { kind: "judge", force: true });
+    void say("我是 5 號，昨晚平安夜，我先聽聽大家怎麼說。", { kind: "ai", voice: { pitch: 1.1, rate: 0.9 }, force: true });
   };
 
   return (
@@ -72,10 +73,23 @@ export default function Settings() {
           />
           <span className="w-10 text-right text-xs text-mist">{Math.round(s.volume * 100)}%</span>
         </label>
+        <label className="flex min-h-16 items-center gap-3 py-2 text-sm">
+          朗讀速度
+          <input
+            type="range"
+            min={0.8}
+            max={1.2}
+            step={0.05}
+            value={s.ttsRate}
+            onChange={(e) => updateAudioSettings({ ttsRate: Number(e.target.value) })}
+            className="flex-1 accent-[#b3122e]"
+          />
+          <span className="w-10 text-right text-xs text-mist">{s.ttsRate.toFixed(2)}×</span>
+        </label>
       </section>
 
       <button type="button" onClick={preview} className="panel mt-3 flex h-14 w-full items-center justify-between rounded-2xl px-4 text-sm">
-        🔔 試聽法官播報與音效<span className="text-mist">›</span>
+        🔔 試聽法官、AI 朗讀與音效<span className="text-mist">›</span>
       </button>
       <p className="mt-3 text-xs text-mist">指定角色改由房主在等待室設定。</p>
     </main>

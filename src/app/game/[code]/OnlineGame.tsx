@@ -80,6 +80,7 @@ export default function OnlineGame({ code }: { code: string }) {
         }
       },
       voice: voiceOn ? { main, wolves } : undefined,
+      readAiSpeech: true,
     };
   }, [data, started, act, code, playerId, voiceOn, main, wolves]);
 

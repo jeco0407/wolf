@@ -254,7 +254,8 @@ export function say(
     // 法官聲音低沉、稍慢；AI 用各自人設的音高與語速
     u.pitch = opts.voice?.pitch ?? 0.7;
     u.rate = opts.voice?.rate ?? 0.95;
-    const safety = setTimeout(resolve, 30000);
+    // 保險：某些瀏覽器不會觸發 onend。長發言約 40 秒，所以給到 60 秒
+    const safety = setTimeout(resolve, 60000);
     u.onend = u.onerror = () => {
       clearTimeout(safety);
       resolve();

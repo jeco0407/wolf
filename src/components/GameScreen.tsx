@@ -78,6 +78,8 @@ export interface GameController {
   setSpeed?: (speed: number) => void;
   // 即時語音（只有連線對局、至少兩位真人時）：全體頻道與狼隊頻道
   voice?: { main: VoiceState; wolves: VoiceState };
+  // 由畫面朗讀 AI 發言（連線對局用；本機模擬由 LocalGame 的 Narrator 朗讀，避免念兩次）
+  readAiSpeech?: boolean;
 }
 
 export function GameScreen({ game, onRestart }: { game: GameController; onRestart: () => void }) {
@@ -120,9 +122,16 @@ export function GameScreen({ game, onRestart }: { game: GameController; onRestar
   const publicEvents = useMemo(() => view.events.filter((e) => e.to === "all"), [view.events]);
   const heard = useRef(0);
   useEffect(() => {
-    if (game.started) publicEvents.slice(heard.current).forEach((e) => announce(e, teamOf(me.role)));
+    if (game.started) {
+      for (const e of publicEvents.slice(heard.current)) {
+        announce(e, teamOf(me.role));
+        // AI 發言用各自人設的聲音念出來；真人的發言大家已經透過語音聽到了，不再念
+        const speaker = e.type === "speech" ? game.meta[e.seat - 1] : undefined;
+        if (e.type === "speech" && game.readAiSpeech && speaker && !speaker.isUser) void say(e.text, { kind: "ai", voice: speaker.voice });
+      }
+    }
     heard.current = publicEvents.length;
-  }, [publicEvents, game.started, me.role]);
+  }, [publicEvents, game.started, game.readAiSpeech, game.meta, me.role]);
 
   // 自己出局時的音效（死因是私密資訊，只看自己的存活狀態）
   const wasAlive = useRef(me.alive);

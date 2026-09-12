@@ -31,9 +31,9 @@ export function botDelay(phase: InteractiveStep): number {
   return 800 + Math.random() * 2500;
 }
 
-// AI 發言顯示後停留多久才換下一位：約每 10 字 1 秒，2.5–12 秒。
-// 讓玩家讀得完，也把呼叫頻率壓在 Groq 每分鐘 token 額度內
-export const readMs = (text: string) => Math.min(12000, Math.max(2500, text.length * 100));
+// AI 發言顯示後停留多久才換下一位：配合朗讀速度（中文語音約每秒 4–5 字），每字 0.23 秒再加 1 秒緩衝，3–40 秒。
+// 讓玩家念完、聽完才換人，也把呼叫頻率壓在 Groq 每分鐘 token 額度內
+export const readMs = (text: string) => Math.min(40000, Math.max(3000, 1000 + text.length * 230));
 
 // 目前階段的識別字串：階段一變，計時與 AI 排程就重來
 export const phaseKeyOf = (s: GameState) => `${s.day}:${JSON.stringify(s.phase)}`;

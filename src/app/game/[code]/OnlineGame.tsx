@@ -1,14 +1,16 @@
 "use client";
 
 import { api } from "@convex/_generated/api";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { GameScreen, type GameController } from "@/components/GameScreen";
 import { SceneBackground } from "@/components/SceneBackground";
 import type { Action } from "@/engine";
 import { getPlayerId } from "@/lib/player";
+import { useVoiceRoom } from "@/voice/livekit";
+import { MIN_HUMANS_FOR_VOICE, type VoiceChannel } from "@/voice/permissions";
 
 const HEARTBEAT_MS = 10_000;
 
@@ -46,6 +48,15 @@ export default function OnlineGame({ code }: { code: string }) {
   const gameId = data?.gameId ?? null;
   const started = gameId !== null && (revealed === gameId || wasRevealed(gameId));
 
+  // 即時語音：至少兩位真人、翻完身份牌後才連線；狼人另外連狼隊頻道
+  const getToken = useAction(api.livekit.token);
+  const fetchToken = useCallback((channel: VoiceChannel) => getToken({ code, playerId, channel }), [getToken, code, playerId]);
+  const humans = data?.member ? data.meta.filter((m) => m.isUser).length : 0;
+  const voiceOn = started && humans >= MIN_HUMANS_FOR_VOICE;
+  const isWolf = !!data?.member && data.view.you?.role === "werewolf";
+  const main = useVoiceRoom("main", voiceOn, gameId ?? "", fetchToken);
+  const wolves = useVoiceRoom("wolves", voiceOn && isWolf, gameId ?? "", fetchToken);
+
   const controller = useMemo<GameController | null>(() => {
     if (!data?.member) return null;
     return {
@@ -68,8 +79,9 @@ export default function OnlineGame({ code }: { code: string }) {
           return "連線中斷，請稍後再試";
         }
       },
+      voice: voiceOn ? { main, wolves } : undefined,
     };
-  }, [data, started, act, code, playerId]);
+  }, [data, started, act, code, playerId, voiceOn, main, wolves]);
 
   if (data === undefined) return <Notice>連線中…</Notice>;
   if (data === null) {

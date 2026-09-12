@@ -3,6 +3,7 @@ import { buildSpeechRequest } from "../src/ai/speech";
 import { EngineError, reduce, viewFor, type Action } from "../src/engine";
 import { botActions } from "../src/sim/bots";
 import { readMs } from "../src/sim/timing";
+import { canJoin, canSpeak, MIN_HUMANS_FOR_VOICE, VOICE_CHANNELS } from "../src/voice/permissions";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, mutation, query, type QueryCtx } from "./_generated/server";
@@ -141,5 +142,37 @@ export const endSpeech = internalMutation({
   handler: async (ctx, { gameId, phaseKey, seat }) => {
     const game = await current(ctx, gameId, phaseKey);
     if (game) await commit(ctx, game, applyAll(loadState(game), [{ type: "endSpeech", seat }]));
+  },
+});
+
+// ---- 即時語音（convex/livekit.ts 使用）----
+
+// 簽 token 前的檢查：必須是這局的真人、能加入這個頻道，而且至少兩位真人才開語音
+export const voiceContext = internalQuery({
+  args: { code: v.string(), playerId: v.string(), channel: v.union(v.literal("main"), v.literal("wolves")) },
+  handler: async (ctx, { code, playerId, channel }) => {
+    const game = await gameFor(ctx, code);
+    if (!game || game.humans.length < MIN_HUMANS_FOR_VOICE) return null;
+    const seat = seatOf(game, playerId);
+    if (seat === null) return null;
+    const state = loadState(game);
+    if (!canJoin(state, seat, channel)) return null;
+    return { gameId: game._id, seat, name: game.meta[seat - 1].name, canPublish: canSpeak(state, seat, channel) };
+  },
+});
+
+// 目前階段每個頻道、每位真人能不能說話
+export const voicePermissions = internalQuery({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, { gameId }) => {
+    const game = await ctx.db.get(gameId);
+    if (!game) return null;
+    const state = loadState(game);
+    return VOICE_CHANNELS.map((channel) => ({
+      channel,
+      seats: game.humans
+        .filter((h) => canJoin(state, h.seat, channel))
+        .map((h) => ({ seat: h.seat, canPublish: canSpeak(state, h.seat, channel) })),
+    }));
   },
 });

@@ -24,7 +24,8 @@ import {
 } from "@/engine";
 import type { SeatMeta } from "@/sim/timing";
 import { narrate } from "@/sim/narrate";
-import { listen } from "@/voice/stt";
+import type { VoiceState } from "@/voice/livekit";
+import { listen, type Listener } from "@/voice/stt";
 
 const NIGHT_TEXT: Record<NightStep, string> = {
   guard: "天黑請閉眼・守衛請睜眼，選擇今晚要守護的人…",
@@ -75,6 +76,8 @@ export interface GameController {
   // 觀戰加速（只有本機模擬支援）
   speed?: number;
   setSpeed?: (speed: number) => void;
+  // 即時語音（只有連線對局、至少兩位真人時）：全體頻道與狼隊頻道
+  voice?: { main: VoiceState; wolves: VoiceState };
 }
 
 export function GameScreen({ game, onRestart }: { game: GameController; onRestart: () => void }) {
@@ -85,6 +88,7 @@ export function GameScreen({ game, onRestart }: { game: GameController; onRestar
   const [note, setNote] = useState<{ key: string; text: string } | null>(null);
   const [draft, setDraft] = useState("");
   const [listening, setListening] = useState(false);
+  const listener = useRef<Listener | null>(null);
   const [seenDawns, setSeenDawns] = useState(0);
   const [deathSeen, setDeathSeen] = useState(false);
 
@@ -133,6 +137,15 @@ export function GameScreen({ game, onRestart }: { game: GameController; onRestar
     recordGame({ id: game.id, role: me.role, winner: phase.winner, survived: me.alive, days: view.day });
   }, [game.started, game.id, phase, me.role, me.alive, view.day]);
 
+  // 換階段（輪到別人、天亮天黑）時停止語音轉文字；伺服器也會同時收回 LiveKit 的發言權限
+  useEffect(
+    () => () => {
+      listener.current?.stop();
+      listener.current = null;
+    },
+    [key],
+  );
+
   // 離開頁面時停止背景音樂
   useEffect(
     () => () => {
@@ -169,14 +182,41 @@ export function GameScreen({ game, onRestart }: { game: GameController; onRestar
     if (!err) setSel(null);
   };
   const endSpeech = async () => {
+    listener.current?.stop();
+    void game.voice?.main.setMic(false);
     if (draft.trim()) await game.dispatch({ type: "say", seat: me.seat, text: draft.trim() });
     setDraft("");
     await act({ type: "endSpeech", seat: me.seat });
   };
-  const startMic = () => {
-    if (listen((text) => setDraft((d) => d + text), () => setListening(false))) setListening(true);
-    else setNote({ key, text: "⚠️ 此瀏覽器不支援語音輸入，請改用打字" });
+  // 麥克風：有即時語音時同時開 LiveKit（大家聽得到）與語音轉文字（寫進發言，AI 才看得懂）
+  const voiceMain = game.voice?.main;
+  const toggleMic = async () => {
+    if (listening || voiceMain?.micOn) {
+      listener.current?.stop();
+      listener.current = null;
+      setListening(false);
+      await voiceMain?.setMic(false);
+      return;
+    }
+    if (voiceMain?.canTalk) await voiceMain.setMic(true);
+    const l = listen(
+      (text) => setDraft((d) => d + text),
+      () => {
+        listener.current = null;
+        setListening(false);
+      },
+    );
+    if (l) {
+      listener.current = l;
+      setListening(true);
+    } else {
+      setNote({
+        key,
+        text: voiceMain?.canTalk ? "⚠️ 此瀏覽器不支援語音轉文字：大家聽得到你，但 AI 看不到，請補打重點" : "⚠️ 此瀏覽器不支援語音輸入，請改用打字",
+      });
+    }
   };
+  const micActive = listening || !!voiceMain?.micOn;
 
   const alive = view.players.filter((p) => p.alive).map((p) => p.seat);
   const others = alive.filter((s) => s !== me.seat);
@@ -230,6 +270,11 @@ export function GameScreen({ game, onRestart }: { game: GameController; onRestar
                 送出
               </button>
             </div>
+            {game.voice?.wolves.canTalk && (
+              <Btn ghost onClick={() => void game.voice!.wolves.setMic(!game.voice!.wolves.micOn)}>
+                {game.voice.wolves.micOn ? "🔴 狼隊語音中（點一下閉麥）" : "🎙️ 開麥和狼隊友說話"}
+              </Btn>
+            )}
             <Btn disabled={!selected} onClick={() => act({ type: "wolfVote", seat: me.seat, target: selected }, `你投刀 ${selected} 號，時間到前可以改投`)}>
               {pickLabel("🗡️ 投刀", "選擇要刀的人")}
             </Btn>
@@ -287,9 +332,9 @@ export function GameScreen({ game, onRestart }: { game: GameController; onRestar
               />
               <button
                 type="button"
-                onClick={startMic}
-                className={`flex h-12 w-12 items-center justify-center rounded-full text-xl ${listening ? "speaking bg-blood" : "bg-panel-2"}`}
-                aria-label="語音輸入"
+                onClick={() => void toggleMic()}
+                className={`flex h-12 w-12 items-center justify-center rounded-full text-xl ${micActive ? "speaking bg-blood" : "bg-panel-2"}`}
+                aria-label={micActive ? "關閉麥克風" : voiceMain?.canTalk ? "開麥發言" : "語音輸入"}
               >
                 🎙️
               </button>
@@ -402,6 +447,18 @@ export function GameScreen({ game, onRestart }: { game: GameController; onRestar
       </section>
 
       <footer className="panel pb-safe space-y-2 rounded-t-2xl border-b-0 px-3 pt-3">
+        {(game.voice?.main.needsUnlock || game.voice?.wolves.needsUnlock) && (
+          <button
+            type="button"
+            onClick={() => {
+              game.voice?.main.unlock();
+              game.voice?.wolves.unlock();
+            }}
+            className="w-full rounded-lg bg-gold/20 py-2 text-sm text-gold"
+          >
+            🔊 點此收聽其他玩家的語音
+          </button>
+        )}
         {hint && <p className="text-center text-sm text-moon/85">{hint}</p>}
         {noteText && <p className="text-center text-xs text-gold">{noteText}</p>}
         {controls}

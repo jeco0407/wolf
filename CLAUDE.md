@@ -93,7 +93,7 @@ src/
     game/page.tsx            # UI 預覽（假資料＋階段切換鈕，給 Gemini 調整畫面用）
     tutorial/page.tsx        # 新手教學
     stats/page.tsx           # 戰績
-    api/livekit/route.ts     # 簽發 LiveKit token（依遊戲階段決定能否發佈音訊）
+    (LiveKit token 改由 convex/livekit.ts 簽發)
   engine/                    # 純 TypeScript 遊戲引擎，零 UI／零 Convex 依賴、可單元測試
     types.ts                 # Role, Player, Phase, GameState, Action, Event
     setup.ts                 # 洗牌、分配身份（含房主指定角色）
@@ -165,7 +165,12 @@ convex/
 - Groq 免費方案每日上限 20 萬 token（TPD，回應標頭不會顯示，429 訊息才看得到），約兩局。
 - 前端：`/room/[code]`（`Room.tsx`，即時等待室）、`/game/[code]`（`OnlineGame.tsx`）。遊戲畫面 `src/components/GameScreen.tsx` 由 `GameController` 提供資料，本機模擬（`/play`）與連線對局共用。連線對局不支援觀戰加速。
 - 節奏與座位設定（`DURATION`、`botDelay`、`readMs`、`buildSeats`）在 `src/sim/timing.ts`，兩邊共用。
-- 尚未做：LiveKit 即時語音、房主以外的人無法「再來一局」（回到等待室由房主按開始）、舊房間清理、Convex 函式的 `convex-test` 測試。
+- 即時語音（LiveKit，已實作，需要設定 key）：
+  - 權限規則在 `src/voice/permissions.ts`（純函式、有測試）：`main` 全體頻道只有目前發言者（含 PK、遺言）能說話；`wolves` 狼隊頻道只有狼人能加入，夜晚狼人行動時存活的狼能說話。至少兩位真人才開語音（`MIN_HUMANS_FOR_VOICE`）。
+  - `convex/livekit.ts`（`"use node"`）：`token` action 先經 `games.voiceContext` 檢查身分與頻道再簽 token（identity 固定為 `seat-N`，只能發佈麥克風）；`syncPermissions` 在每次換階段（`flow.ts` 的 `commit`）用 LiveKit RoomService 更新在線真人的發言權限。
+  - 前端 `src/voice/livekit.ts` 的 `useVoiceRoom`：翻完身份牌後連線、自動播放別人的聲音（瀏覽器擋自動播放時顯示「點此收聽」）；`GameScreen` 的麥克風按鈕同時開 LiveKit 與語音轉文字（`src/voice/stt.ts`，連續辨識），轉出的文字在結束發言時送出，AI 才看得懂真人說了什麼。
+  - 環境變數（Convex 開發與正式環境都要設）：`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`。沒設定時 `token` 回傳 null，遊戲照常（沒有語音）。
+- 尚未做：房主以外的人無法「再來一局」（回到等待室由房主按開始）、舊房間清理、Convex 函式的 `convex-test` 測試。
 
 ### 3.2.1 房間與連線
 - 房號 4 碼（排除易混淆字元），分享連結 `/room/ABCD`。

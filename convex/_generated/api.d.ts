@@ -11,6 +11,7 @@
 import type * as ai from "../ai.js";
 import type * as flow from "../flow.js";
 import type * as games from "../games.js";
+import type * as livekit from "../livekit.js";
 import type * as rooms from "../rooms.js";
 
 import type {
@@ -23,6 +24,7 @@ declare const fullApi: ApiFromModules<{
   ai: typeof ai;
   flow: typeof flow;
   games: typeof games;
+  livekit: typeof livekit;
   rooms: typeof rooms;
 }>;
 

@@ -1,6 +1,7 @@
 import { EngineError, reduce, type Action, type GameState, type Seat } from "../src/engine";
 import { botActions } from "../src/sim/bots";
 import { botDelay, DURATION, phaseKeyOf } from "../src/sim/timing";
+import { MIN_HUMANS_FOR_VOICE } from "../src/voice/permissions";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -73,6 +74,8 @@ export async function commit(ctx: MutationCtx, game: Doc<"games">, state: GameSt
   const deadline = ms ? start + ms : null;
   const timer = deadline !== null ? await ctx.scheduler.runAt(deadline, internal.games.tick, { gameId: game._id, phaseKey: key }) : undefined;
   await ctx.db.patch(game._id, { state: JSON.stringify(state), phaseKey: key, deadline, timer });
+  // 即時語音：換人發言、天黑閉麥等權限變化交給 LiveKit（沒有設定 LiveKit 時 action 直接結束）
+  if (game.humans.length >= MIN_HUMANS_FOR_VOICE) await ctx.scheduler.runAfter(0, internal.livekit.syncPermissions, { gameId: game._id });
 
   if (state.phase.kind === "ended") {
     // 遊戲結束：房間回到等待室（保留真人玩家），結算畫面仍可從 gameId 讀取
